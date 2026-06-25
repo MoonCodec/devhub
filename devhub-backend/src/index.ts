@@ -3,6 +3,7 @@ import cors = require('cors');
 import dotenv = require('dotenv');
 import { initDatabase } from "./config/database";
 import projectRoutes from "./routes/projectRoutes";
+import todoRoutes from "./routes/todoRoutes";
 
 // Chargement des variables d'environnement
 dotenv.config();
@@ -16,6 +17,7 @@ app.use(express.json());
 
 // Routes de l'API
 app.use('/api/projects', projectRoutes);
+app.use('/api/todos', todoRoutes);
 
 app.get('/api/status', (req, res) => {
     res.json({ status: 'online', message: 'Bienvenue sur l\'API DevHub' });
