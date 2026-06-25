@@ -1,0 +1,37 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #e2e8f0;
+  background-color: #0b0f19;
+}
+
+body {
+  margin: 0;
+  padding: 1.5rem;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.desktop-container {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.repo-card {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sync-badge {
+  font-size: 0.75rem;
+  background: #1e3a8a;
+  color: #60a5fa;
+  padding: 2px 2px;
+  border-radius: 4px;
+}
