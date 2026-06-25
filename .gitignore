@@ -1,0 +1,23 @@
+# --- IDE & Éditeurs ---
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# --- Système ---
+.DS_Store
+Thumbs.db
+
+# --- Environnement & Logs ---
+.env
+*.log
+
+# --- Dépendances globales (par sécurité si tu lances un init à la racine) ---
+node_modules/
+dist/
+build/
+database.sqlite
