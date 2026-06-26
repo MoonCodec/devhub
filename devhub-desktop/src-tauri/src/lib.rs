@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 // Structure alignée avec le Frontend
 #[derive(serde::Serialize)]
@@ -41,11 +42,34 @@ fn scan_local_directory(base_path: &str) -> Result<Vec<LocalFolder>, String> {
     Ok(discovered)
 }
 
+// Commande pour lancé l'IDE
+#[tauri::command]
+fn open_project_in_ide(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(&["/C", "code", $path])
+            .spawn()
+            .map_err(|e| format!("Impossible de lancer VS Code : {}", e))?;
+    }
+
+    // Version macOS/Linux
+    #[cfg(not(target_os = "windows")]
+    {
+        Command::new("code")
+            .arg($path)
+            .spawn()
+            .map_err(|e| format!("Impossible de lancer VS Code : {}, e"))?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![scan_local_directory]) // Enregistrement de la commande
+        .invoke_handler(tauri::generate_handler![scan_local_directory, open_project_in_ide])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
