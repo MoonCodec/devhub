@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Terminal, RefreshCw, HardDrive, Folder, Search, LayoutDashboard, Link2 } from 'lucide-react';
+import { Terminal, RefreshCw, HardDrive, Folder, Search, LayoutDashboard, Link2, ExternalLink } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import './App.css';
 
@@ -18,6 +18,7 @@ interface DiscoveredFolder {
 }
 
 function App() {
+    // Navigation & États globaux
     const [activeTab, setActiveTab] = useState<'workspace' | 'scanner'>('workspace');
     const [projects, setProjects] = useState<Project[]>([]);
     const [discovered, setDiscovered] = useState<DiscoveredFolder[]>([]);
@@ -27,6 +28,7 @@ function App() {
 
     const API_URL = 'http://localhost:3000';
 
+    // [API] Récupérer les projets de la base de données
     const fetchApiProjects = async () => {
         try {
             setLoading(true);
@@ -36,25 +38,26 @@ function App() {
                 setProjects(Array.isArray(data) ? data : []);
             }
         } catch (e) {
-            console.error("Impossible de joindre l'API", e);
+            console.error("Impossible de joindre l'API backend :", e);
         } finally {
             setLoading(false);
         }
     };
 
+    // [Rust] Lancer le scanner natif sur le système de fichiers
     const handleLocalScan = async () => {
         try {
             setScanning(true);
             const result: DiscoveredFolder[] = await invoke('scan_local_directory', { basePath: scanPath });
             setDiscovered(result);
         } catch (error) {
-            alert(`Erreur de scan : ${error}`);
+            alert(`Erreur de scan Rust : ${error}`);
         } finally {
             setScanning(false);
         }
     };
 
-    // Lie un dossier local scanné à la base de données globale
+    // [API] Lier un dossier scanné localement à la base SQLite globale
     const handleLinkToApi = async (folder: DiscoveredFolder) => {
         try {
             const response = await fetch(`${API_URL}/projects`, {
@@ -70,13 +73,26 @@ function App() {
 
             if (response.ok) {
                 alert(`Le projet "${folder.name}" a bien été lié à ton DevHub !`);
-                fetchApiProjects(); // Rafraîchit la liste du Workspace
+                fetchApiProjects(); // Synchronise l'onglet Workspace
             } else {
                 const err = await response.json();
                 alert(`Erreur lors de la liaison : ${err.error}`);
             }
         } catch (error) {
-            console.error("Erreur réseau lors de la liaison:", error);
+            console.error("Erreur réseau lors de la liaison :", error);
+        }
+    };
+
+    // [Rust] Ouvrir le dossier sélectionné directement dans l'IDE (VS Code)
+    const handleOpenIDE = async (path: string | undefined) => {
+        if (!path) {
+            alert("Aucun chemin local n'est configuré pour ce projet.");
+            return;
+        }
+        try {
+            await invoke('open_project_in_ide', { path });
+        } catch (error) {
+            alert(`Erreur lors de l'ouverture de l'IDE : ${error}`);
         }
     };
 
@@ -86,6 +102,7 @@ function App() {
 
     return (
         <div className="desktop-container">
+            {/* HEADER GLOBAL */}
             <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1f2937', paddingBottom: '1rem' }}>
                 <div>
                     <h1 style={{ margin: 0, fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -94,7 +111,7 @@ function App() {
                     <p style={{ color: '#94a3b8', margin: '5px 0 0 0', fontSize: '0.85rem' }}>Gestionnaire natif d'environnement</p>
                 </div>
 
-                {/* Navigation par Onglets */}
+                {/* BARRE DE NAVIGATION */}
                 <nav style={{ display: 'flex', gap: '10px', background: '#111827', padding: '4px', borderRadius: '6px', border: '1px solid #1f2937' }}>
                     <button
                         onClick={() => setActiveTab('workspace')}
@@ -111,7 +128,7 @@ function App() {
                 </nav>
             </header>
 
-            {/* VUE 1 : WORKSPACE */}
+            {/* VUE 1 : WORKSPACE (PROJETS EN BASE DE DONNÉES) */}
             {activeTab === 'workspace' && (
                 <main style={{ marginTop: '1.5rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -125,22 +142,34 @@ function App() {
 
                     <div className="repo-list">
                         {loading ? (
-                            <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Chargement...</p>
+                            <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Chargement du Workspace...</p>
                         ) : projects.length === 0 ? (
-                            <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>Aucun projet en base. Va dans l'onglet Scanner pour en ajouter !</p>
+                            <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>Aucun projet en base. Va dans l'onglet Scanner pour lier un dossier !</p>
                         ) : (
                             projects.map((project) => (
-                                <div key={project.id} className="repo-card">
+                                <div key={project.id} className="repo-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <Folder size={16} color="#3b82f6" />
                                             <h3 style={{ margin: 0, fontSize: '0.95rem' }}>{project.name}</h3>
                                         </div>
-                                        <code style={{ fontSize: '0.75rem', color: '#6b7280', display: 'block', marginTop: '4px' }}>
+                                        <code style={{ fontSize: '0.75rem', color: '#6b7280', display: 'block', marginTop: '4px', fontFamily: 'monospace' }}>
                                             {project.local_path || 'Pas de chemin local lié'}
                                         </code>
                                     </div>
-                                    <span className="sync-badge">{project.status.toUpperCase()}</span>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span className="sync-badge">{project.status.toUpperCase()}</span>
+                                        {project.local_path && (
+                                            <button
+                                                onClick={() => handleOpenIDE(project.local_path)}
+                                                style={{ background: '#1e2937', color: '#3b82f6', border: '1px solid #374151', padding: '6px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                                                title="Ouvrir dans l'IDE"
+                                            >
+                                                <ExternalLink size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))
                         )}
@@ -148,14 +177,23 @@ function App() {
                 </main>
             )}
 
-            {/* VUE 2 : SCANNER LOCAL */}
+            {/* VUE 2 : SCANNER LOCAL (RUST FILE SYSTEM ANALYSIS) */}
             {activeTab === 'scanner' && (
                 <main style={{ marginTop: '1.5rem' }}>
                     <section style={{ background: '#111827', padding: '1rem', borderRadius: '6px', border: '1px solid #1f2937', marginBottom: '1.5rem' }}>
                         <h3 style={{ fontSize: '0.95rem', margin: '0 0 10px 0', color: '#94a3b8' }}>Dossier cible pour la recherche</h3>
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <input type="text" value={scanPath} onChange={(e) => setScanPath(e.target.value)} style={{ flex: 1, padding: '8px', background: '#0b0f19', border: '1px solid #374151', borderRadius: '4px', color: 'white', fontFamily: 'monospace', fontSize: '0.85rem' }} />
-                            <button onClick={handleLocalScan} disabled={scanning} style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                            <input
+                                type="text"
+                                value={scanPath}
+                                onChange={(e) => setScanPath(e.target.value)}
+                                style={{ flex: 1, padding: '8px', background: '#0b0f19', border: '1px solid #374151', borderRadius: '4px', color: 'white', fontFamily: 'monospace', fontSize: '0.85rem' }}
+                            />
+                            <button
+                                onClick={handleLocalScan}
+                                disabled={scanning}
+                                style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                            >
                                 {scanning ? 'Scan en cours...' : 'Lancer le Scan'}
                             </button>
                         </div>
@@ -172,13 +210,13 @@ function App() {
                             discovered.map((dir, i) => {
                                 const isAlreadyLinked = projects.some(p => p.local_path === dir.path);
                                 return (
-                                    <div key={i} className="repo-card">
+                                    <div key={i} className="repo-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <Folder size={16} color={dir.is_git ? '#10b981' : '#64748b'} />
                                                 <h3 style={{ margin: 0, fontSize: '0.95rem' }}>{dir.name}</h3>
                                             </div>
-                                            <code style={{ fontSize: '0.75rem', color: '#6b7280', display: 'block', marginTop: '4px' }}>{dir.path}</code>
+                                            <code style={{ fontSize: '0.75rem', color: '#6b7280', display: 'block', marginTop: '4px', fontFamily: 'monospace' }}>{dir.path}</code>
                                         </div>
 
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
